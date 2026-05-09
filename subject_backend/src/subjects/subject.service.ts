@@ -219,4 +219,12 @@ export class SubjectService {
         Object.assign(subject, dto);
         return this.subjectRepository.save(subject);
     }
+
+    async deleteRequest(id: string): Promise<void> {
+        const result = await this.subjectRepository.delete(id);
+        if (result.affected === 0) {
+            throw new NotFoundException('Asignatura no encontrada');
+        }
+    
+        }
 }

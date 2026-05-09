@@ -2,7 +2,7 @@
 
 import { 
   UserPen, Home, School, Search, Settings, NotebookPen, User, LogOut, ChevronDown,
-  Menu, ChevronLeft, ChevronRight, PanelLeft, ClipboardType
+  Menu, ChevronLeft, ChevronRight, PanelLeft, ClipboardType, ChartBarIcon
 } from "lucide-react"
 import {
   Sidebar,
@@ -51,8 +51,13 @@ const items = [
     icon: UserPen,
   },
   {
-    title: "Plan de estudio",
-    url: "/study-plan",
+    title: "Estudiantes",
+    url: "/students",
+    icon: User,
+  },
+  {
+    title: "Distribución de contenidos",
+    url: "/content-distribution",
     icon: Search,
   },
   {
@@ -64,6 +69,11 @@ const items = [
     title: "Inscripciones",
     url: "/enrollments",
     icon: ClipboardType,
+  },
+  {
+    title: "Gráficos",
+    url: "/charts",
+    icon: ChartBarIcon,
   },
   {
     title: "Configuraciones",

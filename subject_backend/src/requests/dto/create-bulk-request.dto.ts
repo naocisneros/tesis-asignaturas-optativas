@@ -1,4 +1,4 @@
-// dto/create-bulk-requests.dto.ts
+
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { IsArray, ValidateNested, IsString, IsOptional } from "class-validator";

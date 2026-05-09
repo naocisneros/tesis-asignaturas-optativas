@@ -33,25 +33,34 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown, MoreHorizontal, GraduationCap, Calendar, User } from "lucide-react"
+import { ArrowUpDown, ChevronDown, MoreHorizontal, Edit, Trash2 } from "lucide-react"
 import { useTeachers } from "@/hooks/use-fetch-teachers"
 import { Teacher } from "@/mapped_types/teacher.type"
-// import { globalFilterFn } from "@/utils/table-filters"
 import { TeacherDetailsDialog } from "./teacher-detail-dialog"
+import { EditTeacherDialog } from "./edit-teacher-dialog"
+import { DeleteTeacherDialog } from "./delete-teacher-dialog"
+
+// Tipo para los datos de la tabla con fechas convertidas
+type TableTeacher = Teacher & {
+  fecha_contratacion: Date | null;
+  fecha_terminacion: Date | null;
+  fecha_nacimiento: Date | null;
+}
 
 export function TeacherDataTable() {
-  const { teachers, loading, error } = useTeachers()
+  const { teachers, loading, error, refresh } = useTeachers()
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
-//   //const [globalFilter, setGlobalFilter] = React.useState<string>("")
 
   const [detailsOpen, setDetailsOpen] = React.useState(false)
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   const [selectedTeacher, setSelectedTeacher] = React.useState<Teacher | null>(null)
 
-  // Definición de columnas (memorizada)
-  const columns = React.useMemo<ColumnDef<Teacher>[]>(() => [
+  // Definición de columnas
+  const columns = React.useMemo<ColumnDef<TableTeacher>[]>(() => [
     {
       id: "select",
       header: ({ table }) => (
@@ -62,6 +71,7 @@ export function TeacherDataTable() {
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
           aria-label="Seleccionar todos"
+          className="border-cyan-400 data-[state=checked]:bg-cyan-600 data-[state=checked]:border-cyan-600"
         />
       ),
       cell: ({ row }) => (
@@ -69,6 +79,7 @@ export function TeacherDataTable() {
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
           aria-label="Seleccionar fila"
+          className="border-cyan-400 data-[state=checked]:bg-cyan-600 data-[state=checked]:border-cyan-600"
         />
       ),
       enableSorting: false,
@@ -81,7 +92,7 @@ export function TeacherDataTable() {
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="hover:text-red-800"
+            className="hover:text-cyan-800"
           >
             Nombre
             <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -108,7 +119,7 @@ export function TeacherDataTable() {
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="hover:text-red-800"
+            className="hover:text-cyan-800"
           >
             Email
             <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -129,6 +140,14 @@ export function TeacherDataTable() {
       },
     },
     {
+      accessorKey: "documento_identidad",
+      header: "Documento",
+      cell: ({ row }) => {
+        const teacher = row.original
+        return <div>{teacher.documento_identidad ?? "-"}</div>
+      },
+    },
+    {
       accessorKey: "años_experiencia",
       header: () => <div className="text-right">Experiencia</div>,
       cell: ({ row }) => {
@@ -142,9 +161,9 @@ export function TeacherDataTable() {
       cell: ({ row }) => {
         const teacher = row.original
         const fecha = teacher.fecha_contratacion
-        const fechaFormateada = fecha instanceof Date
+        const fechaFormateada = fecha
           ? fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
-          : new Date(fecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+          : "-"
         return <div className="text-right font-medium">{fechaFormateada}</div>
       },
     },
@@ -172,23 +191,30 @@ export function TeacherDataTable() {
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0 hover:text-red-800 hover:bg-red-50">
+              <Button variant="ghost" className="h-8 w-8 p-0 hover:text-cyan-800 hover:bg-cyan-50">
                 <span className="sr-only">Abrir menú</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="border-red-200">
+            <DropdownMenuContent align="end" className="border-cyan-200">
               <DropdownMenuGroup>
-                <DropdownMenuLabel className="text-red-900">Acciones</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-cyan-900">Acciones</DropdownMenuLabel>
                 <DropdownMenuItem
                   onClick={() => navigator.clipboard.writeText(teacher.id)}
-                  className="hover:bg-red-50 hover:text-red-900"
+                  className="hover:bg-cyan-50 hover:text-cyan-900"
                 >
                   Copiar identificador
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuGroup>
-                <DropdownMenuItem className="hover:bg-red-50 hover:text-red-900">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSelectedTeacher(teacher)
+                    setEditDialogOpen(true)
+                  }}
+                  className="hover:bg-cyan-50 hover:text-cyan-900"
+                >
+                  <Edit className="mr-2 h-4 w-4" />
                   Editar
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -196,11 +222,18 @@ export function TeacherDataTable() {
                     setSelectedTeacher(teacher)
                     setDetailsOpen(true)
                   }}
-                  className="hover:bg-red-50 hover:text-red-900"
+                  className="hover:bg-cyan-50 hover:text-cyan-900"
                 >
                   Detalles
                 </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-red-50 hover:text-red-900 text-red-600">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSelectedTeacher(teacher)
+                    setDeleteDialogOpen(true)
+                  }}
+                  className="hover:bg-red-50 hover:text-red-600 text-red-600"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
                   Eliminar
                 </DropdownMenuItem>
               </DropdownMenuGroup>
@@ -212,7 +245,7 @@ export function TeacherDataTable() {
   ], [])
 
   // Preparar datos: convertir fechas a Date
-  const tableData = React.useMemo(() => {
+  const tableData = React.useMemo<TableTeacher[]>(() => {
     return teachers.map((teacher) => ({
       ...teacher,
       fecha_contratacion: teacher.fecha_contratacion ? new Date(teacher.fecha_contratacion) : null,
@@ -229,26 +262,27 @@ export function TeacherDataTable() {
       columnFilters,
       columnVisibility,
       rowSelection,
-    //   ////globalFilter,
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    // onGlobalFilterChange: setGlobalFilter,
-    // // globalFilterFn,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   })
 
+  const handleSuccess = () => {
+    refresh() // Recargar los datos después de editar/eliminar
+  }
+
   if (loading) {
     return (
       <div className="w-full flex justify-center items-center py-8">
         <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-red-800 border-r-transparent"></div>
-          <p className="mt-2 text-red-700">Cargando profesores...</p>
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-cyan-800 border-r-transparent"></div>
+          <p className="mt-2 text-cyan-700">Cargando profesores...</p>
         </div>
       </div>
     )
@@ -257,12 +291,12 @@ export function TeacherDataTable() {
   if (error) {
     return (
       <div className="w-full flex justify-center items-center py-8">
-        <div className="text-center text-red-600">
+        <div className="text-center text-cyan-600">
           <p>Error al cargar los profesores: {error}</p>
           <Button
             variant="outline"
-            className="mt-4 border-red-300 text-red-700 hover:bg-red-50"
-            onClick={() => window.location.reload()}
+            className="mt-4 border-cyan-300 text-cyan-700 hover:bg-cyan-50"
+            onClick={refresh}
           >
             Reintentar
           </Button>
@@ -277,17 +311,15 @@ export function TeacherDataTable() {
         <div className="flex items-center py-4">
           <Input
             placeholder="Buscar en todos los campos..."
-            // value={globalFilter}
-            // // // // onChange={(event) => setGlobalFilter(event.target.value)}
-            className="max-w-sm border-red-200 focus-visible:ring-red-400"
+            className="max-w-sm border-cyan-200 focus-visible:ring-cyan-400"
           />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="ml-auto border-red-300 text-red-800 hover:bg-red-50 hover:text-red-900">
+              <Button variant="outline" className="ml-auto border-cyan-300 text-cyan-800 hover:bg-cyan-50 hover:text-cyan-900">
                 Columnas <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="border-red-200">
+            <DropdownMenuContent align="end" className="border-cyan-200">
               <DropdownMenuGroup>
                 {table
                   .getAllColumns()
@@ -296,7 +328,7 @@ export function TeacherDataTable() {
                     return (
                       <DropdownMenuCheckboxItem
                         key={column.id}
-                        className="capitalize hover:bg-red-50 hover:text-red-900"
+                        className="capitalize hover:bg-cyan-50 hover:text-cyan-900"
                         checked={column.getIsVisible()}
                         onCheckedChange={(value) =>
                           column.toggleVisibility(!!value)
@@ -304,6 +336,7 @@ export function TeacherDataTable() {
                       >
                         {column.id === "años_experiencia" ? "Años experiencia" : 
                          column.id === "fecha_contratacion" ? "Fecha contratación" :
+                         column.id === "documento_identidad" ? "Documento" :
                          column.id === "titulos_academicos" ? "Títulos académicos" :
                          column.id}
                       </DropdownMenuCheckboxItem>
@@ -313,14 +346,14 @@ export function TeacherDataTable() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="overflow-hidden rounded-md border border-red-200">
+        <div className="overflow-hidden rounded-md border border-cyan-200">
           <Table>
-            <TableHeader className="bg-red-50">
+            <TableHeader className="bg-cyan-50">
               {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id} className="hover:bg-red-100/50">
+                <TableRow key={headerGroup.id} className="hover:bg-cyan-100/50">
                   {headerGroup.headers.map((header) => {
                     return (
-                      <TableHead key={header.id} className="text-red-900 font-semibold">
+                      <TableHead key={header.id} className="text-cyan-900 font-semibold">
                         {header.isPlaceholder
                           ? null
                           : flexRender(
@@ -339,7 +372,7 @@ export function TeacherDataTable() {
                   <TableRow
                     key={row.id}
                     data-state={row.getIsSelected() && "selected"}
-                    className="hover:bg-red-50/50 border-red-100"
+                    className="hover:bg-cyan-50/50 border-cyan-100"
                   >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id} className="py-2">
@@ -355,7 +388,7 @@ export function TeacherDataTable() {
                 <TableRow>
                   <TableCell
                     colSpan={columns.length}
-                    className="h-24 text-center text-red-700"
+                    className="h-24 text-center text-cyan-700"
                   >
                     No se encontraron profesores.
                   </TableCell>
@@ -365,7 +398,7 @@ export function TeacherDataTable() {
           </Table>
         </div>
         <div className="flex items-center justify-end space-x-2 py-4">
-          <div className="flex-1 text-sm text-red-700">
+          <div className="flex-1 text-sm text-cyan-700">
             {table.getFilteredSelectedRowModel().rows.length} de{" "}
             {table.getFilteredRowModel().rows.length} fila(s) seleccionada(s).
           </div>
@@ -375,7 +408,7 @@ export function TeacherDataTable() {
               size="sm"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
-              className="border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50"
+              className="border-cyan-300 text-cyan-700 hover:bg-cyan-50 disabled:opacity-50"
             >
               Anterior
             </Button>
@@ -384,17 +417,35 @@ export function TeacherDataTable() {
               size="sm"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
-              className="border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50"
+              className="border-cyan-300 text-cyan-700 hover:bg-cyan-50 disabled:opacity-50"
             >
               Siguiente
             </Button>
           </div>
         </div>
       </div>
+
+      {/* Diálogo de detalles */}
       <TeacherDetailsDialog
         teacher={selectedTeacher}
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
+      />
+
+      {/* Diálogo para editar profesor */}
+      <EditTeacherDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        teacher={selectedTeacher}
+        onSuccess={handleSuccess}
+      />
+
+      {/* Diálogo para eliminar profesor */}
+      <DeleteTeacherDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        teacher={selectedTeacher}
+        onSuccess={handleSuccess}
       />
     </>
   )

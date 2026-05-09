@@ -21,8 +21,8 @@ export default function Subjects() {
     <div className="min-h-screen p-6">
       
       <div className="flex justify-between items-start mb-8">
-        <Button onClick={() => setDialogOpen(true)} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
+        <Button onClick={() => setDialogOpen(true)} className="flex items-center gap-2 bg-cyan-800  hover:text-cyan-950  hover:bg-white">
+          <Plus className="h-4 w-4"/>
           Agregar asignatura
         </Button>
         {/* <ButtonGroupCustom /> */}

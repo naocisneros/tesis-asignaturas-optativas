@@ -11,6 +11,8 @@ import { SubjectModule } from './subjects/subject.module';
 import { RequestsModule } from './requests/request.module';
 import { EnrollmentModule } from './enrollment/enrollment.module';
 import { TeacherModule } from './teachers/teacher.module';
+import { ContentDistributionModule } from './content-distribution/content-distribution.module';
+import { StudentModule } from './students/student.module';
 
 @Module({
   imports: [
@@ -36,7 +38,9 @@ import { TeacherModule } from './teachers/teacher.module';
     SubjectModule,
     RequestsModule,
     EnrollmentModule,
-    TeacherModule
+    TeacherModule,
+    ContentDistributionModule,
+    StudentModule
   ],
   // providers: [
   //   {

@@ -33,25 +33,33 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown, MoreHorizontal } from "lucide-react"
+import { ArrowUpDown, ChevronDown, MoreHorizontal, Edit, Trash2 } from "lucide-react"
 import { useSubjects } from "@/hooks/use-fetch-subjects"
 import { Subject } from "@/mapped_types/subject.type"
-import { globalFilterFn } from "@/utils/table-filters"
-import { SubjectDetailsDialog } from "./subject-detail-dialog" // Ajusta la ruta si es necesario
+import { EditSubjectDialog } from "./edit-subject-dialog"
+import { DeleteSubjectDialog } from "./delete-subject-dialog"
+
+// Tipo para los datos de la tabla con fechas convertidas
+type TableSubject = Subject & {
+  fecha_de_inicio: Date | null;
+  fecha_de_fin: Date | null;
+  inicio_de_matrícula: Date | null;
+  fin_de_matrícula: Date | null;
+}
 
 export function SubjectDataTable() {
-  const { subjects, loading, error } = useSubjects()
+  const { subjects, loading, error, refresh } = useSubjects()
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
-  const [globalFilter, setGlobalFilter] = React.useState<string>("")
 
-  const [detailsOpen, setDetailsOpen] = React.useState(false)
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   const [selectedSubject, setSelectedSubject] = React.useState<Subject | null>(null)
 
-  // Definición de columnas (memorizada)
-  const columns = React.useMemo<ColumnDef<Subject>[]>(() => [
+  // Definición de columnas con el tipo correcto
+  const columns = React.useMemo<ColumnDef<TableSubject>[]>(() => [
     {
       id: "select",
       header: ({ table }) => (
@@ -61,26 +69,20 @@ export function SubjectDataTable() {
             (table.getIsSomePageRowsSelected() && "indeterminate")
           }
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
+          aria-label="Seleccionar todos"
+          className="border-cyan-400 data-[state=checked]:bg-cyan-600 data-[state=checked]:border-cyan-600"
         />
       ),
       cell: ({ row }) => (
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
+          aria-label="Seleccionar fila"
+          className="border-cyan-400 data-[state=checked]:bg-cyan-600 data-[state=checked]:border-cyan-600"
         />
       ),
       enableSorting: false,
       enableHiding: false,
-    },
-    {
-      accessorKey: "categoría",
-      header: "Categoría",
-      cell: ({ row }) => {
-        const subject = row.original
-        return <div className="capitalize">{subject.categoría}</div>
-      },
     },
     {
       accessorKey: "nombre",
@@ -89,112 +91,92 @@ export function SubjectDataTable() {
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="hover:text-cyan-800"
           >
             Nombre
-            <ArrowUpDown />
+            <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
         )
       },
       cell: ({ row }) => {
         const subject = row.original
-        return <div className="lowercase">{subject.nombre}</div>
+        return <div className="font-medium">{subject.nombre}</div>
       },
     },
     {
-      accessorKey: "descripción",
-      header: "Descripción",
+      accessorKey: "categoría",
+      header: "Categoría",
       cell: ({ row }) => {
         const subject = row.original
-        return <div className="text-sm text-gray-600">{subject.descripción ?? "-"}</div>
+        const categorias: Record<string, string> = {
+          inteligencia_artificial: "Inteligencia Artificial",
+          programacion: "Programación",
+          matematica: "Matemática",
+          inteligencia_organizacional: "Inteligencia Organizacional",
+          ingenieria_de_software: "Ingeniería de Software",
+          testing: "Testing"
+        }
+        return <div>{categorias[subject.categoría] || subject.categoría}</div>
       },
     },
     {
       accessorKey: "matrícula",
-      header: () => <div className="text-right">Matrícula</div>,
+      header: () => <div className="text-right">Créditos</div>,
       cell: ({ row }) => {
         const subject = row.original
-        const matricula = subject.matrícula ?? 0
-        return <div className="text-right font-medium">{matricula}</div>
-      },
-    },
-    {
-      accessorKey: "inicio_de_matrícula",
-      header: () => <div className="text-right">Inicio de Matrícula</div>,
-      cell: ({ row }) => {
-        const subject = row.original
-        const fecha = subject.inicio_de_matrícula
-        const fechaFormateada = fecha instanceof Date
-          ? fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
-          : new Date(fecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        return <div className="text-right font-medium">{fechaFormateada}</div>
-      },
-    },
-    {
-      accessorKey: "fin_de_matrícula",
-      header: () => <div className="text-right">Fin de Matrícula</div>,
-      cell: ({ row }) => {
-        const subject = row.original
-        const fecha = subject.fin_de_matrícula
-        const fechaFormateada = fecha instanceof Date
-          ? fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
-          : new Date(fecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        return <div className="text-right font-medium">{fechaFormateada}</div>
-      },
-    },
-    {
-      accessorKey: "fecha_de_inicio",
-      header: () => <div className="text-right">Fecha de inicio</div>,
-      cell: ({ row }) => {
-        const subject = row.original
-        const fecha = subject.fecha_de_inicio
-        const fechaFormateada = fecha instanceof Date
-          ? fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
-          : new Date(fecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        return <div className="text-right font-medium">{fechaFormateada}</div>
-      },
-    },
-    {
-      accessorKey: "fecha_de_fin",
-      header: () => <div className="text-right">Fecha de fin</div>,
-      cell: ({ row }) => {
-        const subject = row.original
-        const fecha = subject.fecha_de_fin
-        const fechaFormateada = fecha instanceof Date
-          ? fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
-          : new Date(fecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        return <div className="text-right font-medium">{fechaFormateada}</div>
-      },
-    },
-    {
-      accessorKey: "estado",
-      header: () => <div className="text-right">Estado</div>,
-      cell: ({ row }) => {
-        const subject = row.original
-        return <div className="capitalize text-right">{subject.estado}</div>
+        return <div className="text-right font-medium">{subject.matrícula}</div>
       },
     },
     {
       accessorKey: "sección",
-      header: "Sección",
+      header: "Horario",
       cell: ({ row }) => {
         const subject = row.original
-        return <div>{subject.sección ?? "-"}</div>
+        const horarios: Record<string, string> = {
+          matutina: "Matutina (8am - 12pm)",
+          vespertina: "Vespertina (1pm - 5pm)"
+        }
+        return <div>{horarios[subject.sección] || subject.sección}</div>
       },
     },
     {
-      accessorKey: "profesor",
-      header: "Profesor",
+      accessorKey: "estado",
+      header: "Estado",
       cell: ({ row }) => {
         const subject = row.original
-        return <div>{subject.profesor ?? "-"}</div>
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+            subject.estado === "disponible" 
+              ? "bg-green-100 text-green-800" 
+              : "bg-red-100 text-red-800"
+          }`}>
+            {subject.estado === "disponible" ? "Disponible" : "Cerrada"}
+          </span>
+        )
       },
     },
     {
-      accessorKey: "sede",
-      header: "Sede",
+      accessorKey: "fecha_de_inicio",
+      header: "Fecha inicio",
       cell: ({ row }) => {
         const subject = row.original
-        return <div>{subject.sede ?? "-"}</div>
+        const fecha = subject.fecha_de_inicio
+        const fechaFormateada = fecha
+          ? new Date(fecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+          : "-"
+        return <div>{fechaFormateada}</div>
+      },
+    },
+    {
+      accessorKey: "fecha_de_fin",
+      header: "Fecha fin",
+      cell: ({ row }) => {
+        const subject = row.original
+        const fecha = subject.fecha_de_fin
+        const fechaFormateada = fecha
+          ? new Date(fecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+          : "-"
+        return <div>{fechaFormateada}</div>
       },
     },
     {
@@ -205,31 +187,42 @@ export function SubjectDataTable() {
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal />
+              <Button variant="ghost" className="h-8 w-8 p-0 hover:text-cyan-800 hover:bg-cyan-50">
+                <span className="sr-only">Abrir menú</span>
+                <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="border-cyan-200">
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-cyan-900">Acciones</DropdownMenuLabel>
                 <DropdownMenuItem
                   onClick={() => navigator.clipboard.writeText(subject.id)}
+                  className="hover:bg-cyan-50 hover:text-cyan-900"
                 >
                   Copiar identificador
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuGroup>
-                <DropdownMenuItem>Editar</DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
                     setSelectedSubject(subject)
-                    setDetailsOpen(true)
+                    setEditDialogOpen(true)
                   }}
+                  className="hover:bg-cyan-50 hover:text-cyan-900"
                 >
-                  Detalles
+                  <Edit className="mr-2 h-4 w-4" />
+                  Editar
                 </DropdownMenuItem>
-                <DropdownMenuItem>Eliminar</DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSelectedSubject(subject)
+                    setDeleteDialogOpen(true)
+                  }}
+                  className="hover:bg-red-50 hover:text-red-600 text-red-600"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Eliminar
+                </DropdownMenuItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -238,14 +231,14 @@ export function SubjectDataTable() {
     },
   ], [])
 
-  // Preparar datos: convertir fechas a Date
-  const tableData = React.useMemo(() => {
+  // Preparar datos: mantener las fechas como strings o convertirlas según necesidad
+  const tableData = React.useMemo<TableSubject[]>(() => {
     return subjects.map((subject) => ({
       ...subject,
-      inicio_de_matrícula: new Date(subject.inicio_de_matrícula),
-      fin_de_matrícula: new Date(subject.fin_de_matrícula),
-      fecha_de_inicio: new Date(subject.fecha_de_inicio),
-      fecha_de_fin: new Date(subject.fecha_de_fin),
+      fecha_de_inicio: subject.fecha_de_inicio ? new Date(subject.fecha_de_inicio) : null,
+      fecha_de_fin: subject.fecha_de_fin ? new Date(subject.fecha_de_fin) : null,
+      inicio_de_matrícula: subject.inicio_de_matrícula ? new Date(subject.inicio_de_matrícula) : null,
+      fin_de_matrícula: subject.fin_de_matrícula ? new Date(subject.fin_de_matrícula) : null,
     }))
   }, [subjects])
 
@@ -257,26 +250,27 @@ export function SubjectDataTable() {
       columnFilters,
       columnVisibility,
       rowSelection,
-      globalFilter,
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    onGlobalFilterChange: setGlobalFilter,
-    globalFilterFn,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   })
 
+  const handleSuccess = () => {
+    refresh() // Recargar los datos después de editar/eliminar
+  }
+
   if (loading) {
     return (
       <div className="w-full flex justify-center items-center py-8">
         <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-cyan-900 border-r-transparent"></div>
-          <p className="mt-2 text-gray-600">Cargando materias...</p>
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-cyan-800 border-r-transparent"></div>
+          <p className="mt-2 text-cyan-700">Cargando asignaturas...</p>
         </div>
       </div>
     )
@@ -285,12 +279,12 @@ export function SubjectDataTable() {
   if (error) {
     return (
       <div className="w-full flex justify-center items-center py-8">
-        <div className="text-center text-red-600">
-          <p>Error al cargar las materias: {error}</p>
+        <div className="text-center text-cyan-600">
+          <p>Error al cargar las asignaturas: {error}</p>
           <Button
             variant="outline"
-            className="mt-4"
-            onClick={() => window.location.reload()}
+            className="mt-4 border-cyan-300 text-cyan-700 hover:bg-cyan-50"
+            onClick={refresh}
           >
             Reintentar
           </Button>
@@ -305,17 +299,15 @@ export function SubjectDataTable() {
         <div className="flex items-center py-4">
           <Input
             placeholder="Buscar en todos los campos..."
-            value={globalFilter}
-            onChange={(event) => setGlobalFilter(event.target.value)}
-            className="max-w-sm"
+            className="max-w-sm border-cyan-200 focus-visible:ring-cyan-400"
           />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="ml-auto bg-cyan-900 text-white hover:bg-gray-300 hover:text-cyan-900">
-                Columnas <ChevronDown />
+              <Button variant="outline" className="ml-auto bg-cyan-800 text-white hover:bg-cyan-50 hover:text-cyan-900">
+                Columnas <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="border-cyan-200">
               <DropdownMenuGroup>
                 {table
                   .getAllColumns()
@@ -324,13 +316,19 @@ export function SubjectDataTable() {
                     return (
                       <DropdownMenuCheckboxItem
                         key={column.id}
-                        className="capitalize"
+                        className="capitalize hover:bg-cyan-50 hover:text-cyan-900"
                         checked={column.getIsVisible()}
                         onCheckedChange={(value) =>
                           column.toggleVisibility(!!value)
                         }
                       >
-                        {column.id}
+                        {column.id === "matrícula" ? "Créditos" : 
+                         column.id === "sección" ? "Horario" :
+                         column.id === "fecha_de_inicio" ? "Fecha inicio" :
+                         column.id === "fecha_de_fin" ? "Fecha fin" :
+                         column.id === "inicio_de_matrícula" ? "Inicio matrícula" :
+                         column.id === "fin_de_matrícula" ? "Fin matrícula" :
+                         column.id}
                       </DropdownMenuCheckboxItem>
                     )
                   })}
@@ -338,14 +336,14 @@ export function SubjectDataTable() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="overflow-hidden rounded-md border">
+        <div className="overflow-hidden rounded-md border border-cyan-200">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-cyan-50">
               {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
+                <TableRow key={headerGroup.id} className="hover:bg-cyan-100/50">
                   {headerGroup.headers.map((header) => {
                     return (
-                      <TableHead key={header.id}>
+                      <TableHead key={header.id} className="text-cyan-900 font-semibold">
                         {header.isPlaceholder
                           ? null
                           : flexRender(
@@ -364,9 +362,10 @@ export function SubjectDataTable() {
                   <TableRow
                     key={row.id}
                     data-state={row.getIsSelected() && "selected"}
+                    className="hover:bg-cyan-50/50 border-cyan-100"
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell key={cell.id} className="py-2">
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()
@@ -379,9 +378,9 @@ export function SubjectDataTable() {
                 <TableRow>
                   <TableCell
                     colSpan={columns.length}
-                    className="h-24 text-center"
+                    className="h-24 text-center text-cyan-700"
                   >
-                    Sin resultados.
+                    No se encontraron asignaturas.
                   </TableCell>
                 </TableRow>
               )}
@@ -389,9 +388,9 @@ export function SubjectDataTable() {
           </Table>
         </div>
         <div className="flex items-center justify-end space-x-2 py-4">
-          <div className="text-muted-foreground flex-1 text-sm">
-            {table.getFilteredSelectedRowModel().rows.length} of{" "}
-            {table.getFilteredRowModel().rows.length} row(s) selected.
+          <div className="flex-1 text-sm text-cyan-700">
+            {table.getFilteredSelectedRowModel().rows.length} de{" "}
+            {table.getFilteredRowModel().rows.length} fila(s) seleccionada(s).
           </div>
           <div className="space-x-2">
             <Button
@@ -399,24 +398,37 @@ export function SubjectDataTable() {
               size="sm"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
+              className="border-cyan-300 text-cyan-700 hover:bg-cyan-50 disabled:opacity-50"
             >
-              Previous
+              Anterior
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
+              className="border-cyan-300 text-cyan-700 hover:bg-cyan-50 disabled:opacity-50"
             >
-              Next
+              Siguiente
             </Button>
           </div>
         </div>
       </div>
-      <SubjectDetailsDialog
+
+      {/* Diálogo para editar asignatura */}
+      <EditSubjectDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
         subject={selectedSubject}
-        open={detailsOpen}
-        onOpenChange={setDetailsOpen}
+        onSuccess={handleSuccess}
+      />
+
+      {/* Diálogo para eliminar asignatura */}
+      <DeleteSubjectDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        subject={selectedSubject}
+        onSuccess={handleSuccess}
       />
     </>
   )

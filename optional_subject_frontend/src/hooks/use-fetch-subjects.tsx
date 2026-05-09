@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Subject } from '@/mapped_types/subject.type'
 
 export const useSubjects = () => {
@@ -8,28 +8,34 @@ export const useSubjects = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchSubjects = async () => {
-      try {
-        setLoading(true)
-        const response = await fetch('http://localhost:8000/api/subjects')
-        
-        if (!response.ok) {
-          throw new Error(`Error: ${response.status}`)
-        }
-        
-        const data = await response.json()
-        setSubjects(data.data)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error desconocido')
-        console.error('Error fetching subjects:', err)
-      } finally {
-        setLoading(false)
+  const fetchSubjects = useCallback(async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('http://localhost:8000/api/subjects')
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`)
       }
+      
+      const data = await response.json()
+      setSubjects(data.data)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido')
+      console.error('Error fetching subjects:', err)
+    } finally {
+      setLoading(false)
     }
-
-    fetchSubjects()
   }, [])
 
-  return { subjects, loading, error }
+  useEffect(() => {
+    fetchSubjects()
+  }, [fetchSubjects])
+
+  return { 
+    subjects, 
+    loading, 
+    error,
+    refresh: fetchSubjects // Función para recargar los datos
+  }
 }
